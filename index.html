@@ -1055,21 +1055,20 @@
     <button class="modal-close" onclick="closeModal()">✕</button>
     <h2>🦫 CONNECT TO COLONY</h2>
     <p>
-      Enter the URL of your local BeaverOps relay.<br><br>
-      <strong style="color:var(--amber)">Option 1 — Local network only:</strong><br>
-      Download and run the <a href="https://github.com/kodatcg/beaverops/releases" target="_blank">BeaverOps Agent</a>,
-      then enter <code style="color:var(--amber)">http://localhost:3000</code><br><br>
-      <strong style="color:var(--amber)">Option 2 — Any device/network:</strong><br>
-      Run the agent, then use <a href="https://ngrok.com" target="_blank">Ngrok</a> or
-      <a href="https://pinggy.io" target="_blank">Pinggy</a> to expose it and paste the public URL here.
+      Enter the session code shown in your <strong>BeaverOps Agent</strong> window.<br><br>
+      Don't have the agent yet?<br>
+      <a href="https://github.com/KodaTCG/beaverops/releases" target="_blank" style="color:var(--amber)">Download BeaverOps Agent →</a><br><br>
+      Run the agent on the same PC as Timberborn, then enter the 8-character code it shows you.
     </p>
     <div class="form-group">
-      <label class="form-label">Game Server URL</label>
-      <input class="form-input" id="serverUrlInput" type="text" value="http://localhost:3000" placeholder="http://localhost:3000" />
+      <label class="form-label">Session Code</label>
+      <input class="form-input" id="sessionCodeInput" type="text" placeholder="XXXX-XXXX" maxlength="9"
+        style="text-transform:uppercase;letter-spacing:4px;font-size:1.1rem;text-align:center"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9-]/g,'').slice(0,9)" />
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeModal()">CANCEL</button>
-      <button class="btn btn-primary" onclick="saveAndConnect()">CONNECT 🦫</button>
+      <button class="btn btn-primary" onclick="saveAndConnectCode()">CONNECT 🦫</button>
     </div>
   </div>
 </div>
@@ -1281,22 +1280,13 @@
 // ═══════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════
-// When running via start.bat/start.sh, the proxy is on port 3000
-// and forwards to the game on 8080 automatically — no CORS issues.
-// Migrate: if saved URL points directly to game on :8080, reset to proxy on :3000
-let _savedUrl = localStorage.getItem('tb_server');
-if (_savedUrl && _savedUrl.includes(':8080')) { localStorage.removeItem('tb_server'); _savedUrl = null; }
-// If opening from a network device (tablet/phone), use the host we were served from
-// so we don't try to hit localhost on the tablet itself
-const _defaultHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://localhost:3000'
-  : `http://${window.location.hostname}:3000`;
-let serverUrl = _savedUrl || _defaultHost;
-let connected = false;
-let pollTimer = null;
-let pollCountdown = 5;
-let totalEvents = 0;
-const POLL_INTERVAL = 5000;
+const RELAY_URL   = 'wss://beaverops-relay.kodatcg.workers.dev';
+let sessionCode   = localStorage.getItem('tb_session_code') || '';
+let ws            = null;
+let connected     = false;
+let agentConnected = false;
+let totalEvents   = 0;
+const POLL_INTERVAL = 5000; // kept for refresh bar display only
 
 // Prev state for change detection
 let prevLevers = {};
@@ -1305,38 +1295,115 @@ let prevThreatLevel = 'safe';
 
 
 // ═══════════════════════════════════════════════════════════
-// FETCH WITH TIMEOUT
+// WEBSOCKET CONNECTION
 // ═══════════════════════════════════════════════════════════
-async function fetchWithTimeout(url, ms = 4000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), ms);
-  try {
-    const res = await fetch(url, { signal: controller.signal, mode: 'cors' });
-    clearTimeout(id);
-    return res;
-  } catch (e) {
-    clearTimeout(id);
-    throw e;
+function connectWebSocket(code) {
+  if (ws) { try { ws.close(); } catch(e) {} }
+
+  sessionCode = code;
+  localStorage.setItem('tb_session_code', code);
+
+  const url = `${RELAY_URL}/relay/${code}/dashboard`;
+  setConnState('connecting', 'CONNECTING...');
+  addTimelineEntry('info', `🔌 Connecting with code <strong>${code}</strong>...`);
+
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    // Wait for relay to confirm connection
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      handleRelayMessage(msg);
+    } catch(e) {}
+  };
+
+  ws.onclose = () => {
+    if (connected || agentConnected) {
+      addTimelineEntry('warn', '❌ Disconnected from relay');
+    }
+    connected = false;
+    agentConnected = false;
+    setConnState('error', 'DISCONNECTED');
+    // Auto-reconnect after 5s
+    setTimeout(() => {
+      if (sessionCode) connectWebSocket(sessionCode);
+    }, 5000);
+  };
+
+  ws.onerror = () => {
+    setConnState('error', 'CONN. FAILED');
+  };
+}
+
+function handleRelayMessage(msg) {
+  const type = msg.type;
+
+  if (type === 'connected') {
+    connected = true;
+    agentConnected = msg.peerConnected;
+    setConnState('connected', sessionCode);
+    addTimelineEntry('ok', `✅ Relay connected — code <strong>${sessionCode}</strong>`);
+    if (!agentConnected) {
+      setConnState('connecting', 'WAITING FOR AGENT');
+      addTimelineEntry('info', '⏳ Waiting for BeaverOps Agent to connect...');
+    }
+  }
+
+  else if (type === 'peer_connected') {
+    agentConnected = true;
+    setConnState('connected', sessionCode);
+    addTimelineEntry('ok', '🦫 <strong>Agent connected</strong> — colony data incoming!');
+    showToast('Agent Connected', '🦫 BeaverOps Agent is live. Colony data incoming!', 'success');
+  }
+
+  else if (type === 'peer_disconnected') {
+    agentConnected = false;
+    setConnState('connecting', 'AGENT OFFLINE');
+    addTimelineEntry('warn', '⚠️ Agent disconnected — is the game still running?');
+    showToast('Agent Disconnected', 'BeaverOps Agent went offline.', 'danger');
+  }
+
+  else if (type === 'game_data') {
+    const { levers, adapters } = msg.payload;
+    processGameData(levers || [], adapters || []);
+  }
+
+  else if (type === 'game_offline') {
+    setConnState('connecting', 'GAME OFFLINE');
+    addTimelineEntry('warn', '⚠️ Game not running or no map loaded');
+  }
+
+  else if (type === 'lever_result') {
+    if (!msg.ok) {
+      addTimelineEntry('warn', `❌ Lever command failed for <strong>${msg.name}</strong>`);
+      showToast('Lever Failed', `Could not toggle ${msg.name}`, 'danger');
+    }
+  }
+
+  else if (type === 'error') {
+    addTimelineEntry('warn', `⚠️ ${msg.message}`);
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// FETCH GAME DATA
-// ═══════════════════════════════════════════════════════════
-async function fetchGameData() {
-  try {
-    const [leversRes, adaptersRes] = await Promise.all([
-      fetchWithTimeout(`${serverUrl}/api/levers`),
-      fetchWithTimeout(`${serverUrl}/api/adapters`)
-    ]);
+function processGameData(levers, adapters) {
+  detectChanges(levers, adapters);
+  renderLevers(levers);
+  renderAdapters(adapters);
+  document.getElementById('statLevers').textContent = levers.length;
+  const adapterMap = {};
+  adapters.forEach(a => adapterMap[a.name] = a.state);
+  updateAdapterAlertBanners(adapterMap);
+  const threat = computeThreatLevel(adapters);
+  updateThreatDisplay(threat, adapters);
+}
 
-    if (!leversRes.ok || !adaptersRes.ok) throw new Error('Bad response');
-
-    const levers = await leversRes.json();
-    const adapters = await adaptersRes.json();
-    return { ok: true, levers, adapters };
-  } catch (e) {
-    return { ok: false, error: e.message };
+// Send a command to the agent via relay
+function sendCommand(cmd) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(cmd));
   }
 }
 
@@ -1390,8 +1457,7 @@ function applyColor(name, hex) {
   if (btn) btn.style.background = hex;
 
   const cleanHex = hex.replace('#', '');
-  fetchWithTimeout(`${serverUrl}/api/color/${encodeURIComponent(name)}/${cleanHex}`)
-    .catch(e => addTimelineEntry('warn', `Color change failed for <strong>${name}</strong>`));
+  sendCommand({ type: 'lever_color', name, color: cleanHex });
 
   addTimelineEntry('lever', `Color changed → <strong>${name}</strong> to <span style="color:${hex}">${hex}</span>`);
 }
@@ -1661,22 +1727,9 @@ function clearTimeline() {
 // ═══════════════════════════════════════════════════════════
 // LEVER TOGGLE
 // ═══════════════════════════════════════════════════════════
-async function toggleLever(name, on) {
-  try {
-    const endpoint = on ? 'switch-on' : 'switch-off';
-    const res = await fetchWithTimeout(`${serverUrl}/api/${endpoint}/${encodeURIComponent(name)}`);
-    if (res.ok) {
-      addTimelineEntry('lever', `Lever set → <strong>${name}</strong> ${on ? 'ON ✅' : 'OFF ⚫'}`);
-      showToast('Lever Updated', `${name} is now ${on ? 'ON' : 'OFF'}`, 'success');
-    } else {
-      throw new Error('Server returned error');
-    }
-  } catch (e) {
-    addTimelineEntry('warn', `❌ Lever toggle failed for <strong>${name}</strong>: ${e.message}`);
-    showToast('Toggle Failed', e.message, 'danger');
-    // Revert the toggle visually
-    fetchGameData().then(d => { if(d.ok) renderLevers(d.levers); });
-  }
+function toggleLever(name, on) {
+  addTimelineEntry('lever', `Lever → <strong>${name}</strong> ${on ? 'ON ✅' : 'OFF ⚫'}`);
+  sendCommand({ type: 'lever_toggle', name, state: on });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1757,74 +1810,23 @@ function showToast(title, msg, type = '') {
 // ═══════════════════════════════════════════════════════════
 // POLLING LOOP
 // ═══════════════════════════════════════════════════════════
-async function poll() {
-  const data = await fetchGameData();
-
-  if (data.ok) {
-    if (!connected) {
-      connected = true;
-      setConnState('connected', serverUrl.replace('http://', ''));
-      addTimelineEntry('ok', `✅ Connected to <strong>${serverUrl}</strong>`);
-    }
-
-    detectChanges(data.levers, data.adapters);
-
-    renderLevers(data.levers);
-    renderAdapters(data.adapters);
-    document.getElementById('statLevers').textContent = data.levers.length;
-
-    // Update per-adapter banners (always, not just on change)
-    const adapterMap = {};
-    data.adapters.forEach(a => adapterMap[a.name] = a.state);
-    updateAdapterAlertBanners(adapterMap);
-
-    // Compute threat from adapters
-    const threat = computeThreatLevel(data.adapters);
-    updateThreatDisplay(threat, data.adapters);
-  } else {
-    if (connected) {
-      connected = false;
-      addTimelineEntry('warn', `❌ Lost connection to game server`);
-    }
-    setConnState('error', 'DISCONNECTED');
-    setConnState('error', 'CONN. FAILED');
-  }
-}
-
 // ═══════════════════════════════════════════════════════════
-// REFRESH BAR
+// REFRESH BAR — shows time since last data received
 // ═══════════════════════════════════════════════════════════
-function startRefreshBar() {
+let lastDataTime = Date.now();
+
+function tickRefreshBar() {
   const bar = document.getElementById('refreshBar');
   const countdown = document.getElementById('refreshCountdown');
-  let start = Date.now();
-  let last = 0;
-
-  function animFrame(ts) {
-    const elapsed = Date.now() - start;
-    const pct = Math.min((elapsed / POLL_INTERVAL) * 100, 100);
-    bar.style.width = pct + '%';
-    const remaining = Math.max(0, Math.ceil((POLL_INTERVAL - elapsed) / 1000));
-    if (remaining !== last) {
-      countdown.textContent = remaining + 's';
-      last = remaining;
-    }
-    if (elapsed < POLL_INTERVAL) requestAnimationFrame(animFrame);
-  }
-
-  requestAnimationFrame(animFrame);
+  const elapsed = Date.now() - lastDataTime;
+  const pct = Math.min((elapsed / POLL_INTERVAL) * 100, 100);
+  if (bar) bar.style.width = pct + '%';
+  const remaining = Math.max(0, Math.ceil((POLL_INTERVAL - elapsed) / 1000));
+  if (countdown) countdown.textContent = agentConnected ? remaining + 's' : '—';
+  requestAnimationFrame(tickRefreshBar);
 }
 
-function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  poll();
-  startRefreshBar();
-
-  pollTimer = setInterval(() => {
-    poll();
-    startRefreshBar();
-  }, POLL_INTERVAL);
-}
+requestAnimationFrame(tickRefreshBar);
 
 // ═══════════════════════════════════════════════════════════
 // CONNECTION STATE UI
@@ -1855,17 +1857,21 @@ document.getElementById('slackWebhook').addEventListener('change', () => {
 // INIT
 // ═══════════════════════════════════════════════════════════
 function init() {
-  // Restore saved values
   const savedDiscord = localStorage.getItem('tb_discord');
   const savedSlack = localStorage.getItem('tb_slack');
   if (savedDiscord) document.getElementById('discordWebhook').value = savedDiscord;
   if (savedSlack) document.getElementById('slackWebhook').value = savedSlack;
-  else {
-    setConnState('connecting', 'CONNECTING...');
-    addTimelineEntry('info', `🔌 Connecting to <strong>${serverUrl}</strong>...`);
-  }
 
-  startPolling();
+  if (sessionCode) {
+    // Restore previous session
+    addTimelineEntry('info', `🔌 Reconnecting with code <strong>${sessionCode}</strong>...`);
+    connectWebSocket(sessionCode);
+  } else {
+    setConnState('error', 'NO SESSION');
+    addTimelineEntry('info', '👆 Click the connection pill to enter your session code.');
+    // Prompt the modal on first visit
+    setTimeout(openModal, 800);
+  }
 }
 
 init();
