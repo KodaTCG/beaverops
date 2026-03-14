@@ -1,0 +1,1874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BeaverOps — Timberborn Colony Dashboard | beaverops.com</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Russo+One&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0d0b08;
+    --bg-panel: #161310;
+    --bg-card: #1e1a14;
+    --bg-card2: #231f18;
+    --border: #3a3020;
+    --border-bright: #5a4a2a;
+    --wood: #8B6914;
+    --wood-light: #c49a3c;
+    --wood-pale: #e8c96a;
+    --amber: #f59e0b;
+    --amber-glow: #fbbf24;
+    --green: #4ade80;
+    --green-dark: #166534;
+    --red: #f87171;
+    --red-dark: #7f1d1d;
+    --orange: #fb923c;
+    --teal: #2dd4bf;
+    --text-primary: #e8d5a3;
+    --text-secondary: #a08c5a;
+    --text-dim: #5a4e35;
+    --badtide: #22c55e;
+    --badtide-glow: #4ade80;
+    --safe: #f59e0b;
+    --radius: 4px;
+    --font-display: 'Russo One', sans-serif;
+    --font-ui: 'Oswald', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    font-family: var(--font-ui);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Wood grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(
+        92deg,
+        transparent,
+        transparent 3px,
+        rgba(139,105,20,0.015) 3px,
+        rgba(139,105,20,0.015) 4px
+      ),
+      repeating-linear-gradient(
+        178deg,
+        transparent,
+        transparent 40px,
+        rgba(139,105,20,0.02) 40px,
+        rgba(139,105,20,0.02) 41px
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 10;
+    border-bottom: 2px solid var(--border-bright);
+    background: linear-gradient(180deg, #1a1408 0%, var(--bg-deep) 100%);
+    padding: 0 24px;
+  }
+
+  .header-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 0;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-beaver {
+    font-size: 2.4rem;
+    filter: drop-shadow(0 0 12px var(--amber));
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { filter: drop-shadow(0 0 12px var(--amber)); }
+    50% { filter: drop-shadow(0 0 20px var(--amber-glow)); }
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1;
+  }
+
+  .logo-title {
+    font-family: var(--font-display);
+    font-size: 1.9rem;
+    color: var(--wood-pale);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .logo-sub {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .connection-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 6px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .connection-pill:hover { border-color: var(--wood); color: var(--text-primary); }
+
+  .conn-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.3s;
+  }
+
+  .conn-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .conn-dot.connecting { background: var(--amber); box-shadow: 0 0 8px var(--amber); animation: pulse 1s infinite; }
+  .conn-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── CONNECT MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.open { display: flex; }
+
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-bright);
+    border-top: 3px solid var(--amber);
+    width: 460px;
+    padding: 28px;
+    position: relative;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.8);
+  }
+
+  .modal h2 {
+    font-family: var(--font-display);
+    color: var(--wood-pale);
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    font-size: 1.3rem;
+  }
+
+  .modal p {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+
+  .modal p a { color: var(--amber); text-decoration: none; }
+  .modal p a:hover { text-decoration: underline; }
+
+  .form-group { margin-bottom: 16px; }
+
+  .form-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .form-input {
+    width: 100%;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .form-input:focus { border-color: var(--amber); }
+
+  .btn {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--amber);
+    color: var(--bg-deep);
+  }
+
+  .btn-primary:hover { background: var(--amber-glow); transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+
+  .btn-ghost:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+
+  .btn-row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+  .modal-close {
+    position: absolute;
+    top: 14px; right: 14px;
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: color 0.2s;
+    font-family: var(--font-mono);
+  }
+
+  .modal-close:hover { color: var(--text-primary); }
+
+  /* ── MAIN LAYOUT ── */
+  .main {
+    position: relative;
+    z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── BADTIDE HERO ── */
+  .badtide-hero {
+    position: relative;
+    border: 1px solid var(--border-bright);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 24px;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    transition: all 0.8s;
+  }
+
+  .badtide-hero.safe-state {
+    background: linear-gradient(135deg, #0d1a10 0%, #0a1a0d 50%, #111a08 100%);
+    border-color: #2d5a30;
+  }
+
+  .badtide-hero.danger-state {
+    background: linear-gradient(135deg, #0a1a0a 0%, #0d2010 50%, #0a1a05 100%);
+    border-color: var(--badtide);
+    box-shadow: 0 0 40px rgba(34,197,94,0.2), inset 0 0 60px rgba(34,197,94,0.05);
+    animation: dangerPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes dangerPulse {
+    0%, 100% { box-shadow: 0 0 40px rgba(34,197,94,0.2), inset 0 0 60px rgba(34,197,94,0.05); }
+    50% { box-shadow: 0 0 70px rgba(34,197,94,0.4), inset 0 0 80px rgba(34,197,94,0.1); }
+  }
+
+  .badtide-hero.drought-state {
+    background: linear-gradient(135deg, #1a1000 0%, #2a1a00 50%, #1a1000 100%);
+    border-color: var(--orange);
+    box-shadow: 0 0 40px rgba(251,146,60,0.2), inset 0 0 60px rgba(251,146,60,0.05);
+    animation: droughtPulse 2s ease-in-out infinite;
+  }
+
+  .badtide-hero.both-state {
+    background: linear-gradient(135deg, #0a1a05 0%, #1a1a00 50%, #0a1500 100%);
+    border-color: var(--red);
+    box-shadow: 0 0 40px rgba(248,113,113,0.3), inset 0 0 60px rgba(248,113,113,0.08);
+    animation: bothPulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes bothPulse {
+    0%, 100% { box-shadow: 0 0 40px rgba(248,113,113,0.3), inset 0 0 60px rgba(248,113,113,0.08); }
+    50% { box-shadow: 0 0 80px rgba(248,113,113,0.6), inset 0 0 100px rgba(248,113,113,0.15); }
+  }
+
+  @keyframes droughtPulse {
+    0%, 100% { box-shadow: 0 0 40px rgba(251,146,60,0.2), inset 0 0 60px rgba(251,146,60,0.05); }
+    50% { box-shadow: 0 0 70px rgba(251,146,60,0.4), inset 0 0 80px rgba(251,146,60,0.1); }
+  }
+
+  .hero-bg-text {
+    position: absolute;
+    right: -20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--font-display);
+    font-size: 8rem;
+    font-weight: 900;
+    opacity: 0.04;
+    letter-spacing: -4px;
+    pointer-events: none;
+    white-space: nowrap;
+    transition: all 0.8s;
+  }
+
+  .badtide-hero.safe-state .hero-bg-text { color: var(--green); }
+  .badtide-hero.danger-state .hero-bg-text { color: var(--badtide); }
+  .badtide-hero.drought-state .hero-bg-text { color: var(--orange); }
+  .badtide-hero.both-state .hero-bg-text { color: var(--red); }
+
+  .hero-content {
+    padding: 36px 48px;
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    width: 100%;
+  }
+
+  .hero-icon {
+    font-size: 5rem;
+    line-height: 1;
+    transition: all 0.5s;
+    filter: drop-shadow(0 0 20px currentColor);
+  }
+
+  .safe-state .hero-icon { color: var(--green); }
+  .danger-state .hero-icon { color: var(--badtide); animation: wiggle 0.5s ease-in-out infinite; }
+  .drought-state .hero-icon { color: var(--orange); }
+  .both-state .hero-icon { color: var(--red); animation: wiggle 0.3s ease-in-out infinite; }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+  }
+
+  .hero-text { flex: 1; }
+
+  .hero-status-label {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+
+  .hero-status-main {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    line-height: 1;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: all 0.5s;
+  }
+
+  .safe-state .hero-status-main { color: var(--green); text-shadow: 0 0 30px rgba(74,222,128,0.4); }
+  .danger-state .hero-status-main { color: var(--badtide-glow); text-shadow: 0 0 40px rgba(74,222,128,0.6); }
+  .drought-state .hero-status-main { color: var(--orange); text-shadow: 0 0 30px rgba(251,146,60,0.4); }
+  .both-state .hero-status-main { color: var(--red); text-shadow: 0 0 40px rgba(248,113,113,0.6); }
+
+  .hero-status-sub {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 24px;
+    padding-right: 20px;
+  }
+
+  .hero-stat {
+    text-align: center;
+    padding: 16px 20px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-width: 90px;
+  }
+
+  .hero-stat-val {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    color: var(--wood-pale);
+    line-height: 1;
+  }
+
+  .hero-stat-lbl {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    display: none;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    animation: slideDown 0.3s ease;
+    border: 1px solid;
+  }
+
+  .alert-banner.show { display: flex; }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .alert-banner.badtide {
+    background: rgba(34,197,94,0.1);
+    border-color: var(--badtide);
+    color: var(--badtide-glow);
+  }
+
+  .alert-banner.drought {
+    background: rgba(251,146,60,0.1);
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .alert-banner.adapter {
+    background: rgba(45,212,191,0.08);
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+
+  .alert-icon { font-size: 1.4rem; }
+
+  /* ── GRID ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+
+  @media (max-width: 900px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .hero-content { flex-direction: column; text-align: center; }
+    .hero-stats { justify-content: center; }
+    .hero-status-main { font-size: 2rem; }
+  }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--bg-card2) 0%, var(--bg-card) 100%);
+  }
+
+  .panel-title {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--wood-light);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .panel-title-icon { font-size: 1rem; }
+
+  .panel-badge {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  .panel-body { padding: 20px; }
+
+  /* ── LEVERS ── */
+  .levers-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .lever-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 0.2s;
+  }
+
+  .lever-row:hover { border-color: var(--border-bright); }
+
+  .lever-indicator {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+
+  .lever-indicator.on {
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+  }
+
+  .lever-indicator.off {
+    background: var(--text-dim);
+    box-shadow: none;
+  }
+
+  .lever-name {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+  }
+
+  .lever-spring-badge {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    padding: 2px 6px;
+    border-radius: 2px;
+    opacity: 0.7;
+  }
+
+  .lever-controls { display: flex; gap: 8px; align-items: center; }
+
+  .lever-toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    cursor: pointer;
+  }
+
+  .lever-toggle input { display: none; }
+
+  .lever-toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-card2);
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    transition: all 0.3s;
+  }
+
+  .lever-toggle input:checked + .lever-toggle-track {
+    background: var(--green-dark);
+    border-color: var(--green);
+  }
+
+  .lever-toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: all 0.3s;
+  }
+
+  .lever-toggle input:checked ~ .lever-toggle-thumb {
+    left: 23px;
+    background: var(--green);
+  }
+
+  .color-btn {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--border-bright);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0;
+    flex-shrink: 0;
+  }
+
+  .color-btn:hover { transform: scale(1.2); border-color: var(--wood-light); }
+
+  .color-picker-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  /* ── ADAPTERS ── */
+  .adapters-list { display: flex; flex-direction: column; gap: 12px; }
+
+  .adapter-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .adapter-led {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s;
+  }
+
+  .adapter-led.active {
+    background: var(--teal);
+    box-shadow: 0 0 10px var(--teal);
+    animation: blink 1.5s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .adapter-led.inactive {
+    background: var(--text-dim);
+  }
+
+  .adapter-name {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-primary);
+  }
+
+  .adapter-state-badge {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    border-radius: 2px;
+    border: 1px solid;
+    transition: all 0.3s;
+  }
+
+  .adapter-state-badge.on {
+    color: var(--teal);
+    border-color: var(--teal);
+    background: rgba(45,212,191,0.08);
+  }
+
+  .adapter-state-badge.off {
+    color: var(--text-dim);
+    border-color: var(--border);
+    background: transparent;
+  }
+
+  .adapter-alert-icon {
+    font-size: 0.85rem;
+    opacity: 0.25;
+    flex-shrink: 0;
+    transition: opacity 0.2s;
+    cursor: default;
+  }
+
+  .adapter-row .mini-toggle { flex-shrink: 0; }
+  .adapter-row .mini-toggle input:checked ~ .adapter-alert-icon { opacity: 1; }
+
+  /* ── TIMELINE ── */
+  .timeline { display: flex; flex-direction: column; gap: 0; max-height: 340px; overflow-y: auto; }
+
+  .timeline::-webkit-scrollbar { width: 4px; }
+  .timeline::-webkit-scrollbar-track { background: var(--bg-deep); }
+  .timeline::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+  .timeline-entry {
+    display: flex;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.3s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .timeline-entry:last-child { border-bottom: none; }
+
+  .timeline-time {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    width: 70px;
+    flex-shrink: 0;
+    padding-top: 2px;
+  }
+
+  .timeline-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .timeline-dot.info { background: var(--teal); }
+  .timeline-dot.warn { background: var(--orange); }
+  .timeline-dot.danger { background: var(--badtide); }
+  .timeline-dot.ok { background: var(--green); }
+  .timeline-dot.lever { background: var(--amber); }
+
+  .timeline-msg {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .timeline-msg strong { color: var(--text-primary); }
+
+  .timeline-empty {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 30px 0;
+  }
+
+  /* ── DISCORD CONFIG ── */
+  .alert-config { display: flex; flex-direction: column; gap: 16px; }
+
+  .config-row { display: flex; flex-direction: column; gap: 6px; }
+
+  .config-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-secondary);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .config-input {
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    padding: 9px 14px;
+    border-radius: var(--radius);
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+  }
+
+  .config-input:focus { border-color: var(--amber); }
+
+  .config-toggles { display: flex; flex-direction: column; gap: 10px; }
+
+  .config-toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .config-toggle-label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mini-toggle {
+    position: relative;
+    width: 36px; height: 20px;
+    cursor: pointer;
+  }
+
+  .mini-toggle input { display: none; }
+
+  .mini-toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--bg-card2);
+    border: 1px solid var(--border-bright);
+    border-radius: 10px;
+    transition: all 0.3s;
+  }
+
+  .mini-toggle input:checked + .mini-toggle-track {
+    background: #1a3a2a;
+    border-color: var(--amber);
+  }
+
+  .mini-toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 12px; height: 12px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: all 0.3s;
+  }
+
+  .mini-toggle input:checked ~ .mini-toggle-thumb {
+    left: 19px;
+    background: var(--amber);
+  }
+
+  .test-btn {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--text-secondary);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .test-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* ── REFRESH CONTROL ── */
+  .refresh-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 20px;
+    background: var(--bg-deep);
+    border-top: 1px solid var(--border);
+  }
+
+  .refresh-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .refresh-progress {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .refresh-progress-bar {
+    height: 100%;
+    background: var(--amber);
+    width: 0%;
+    transition: width linear;
+  }
+
+  .refresh-countdown {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    width: 30px;
+    text-align: right;
+  }
+
+  /* ── EMPTY STATES ── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 32px 20px;
+    text-align: center;
+  }
+
+  .empty-icon { font-size: 2.5rem; opacity: 0.4; }
+
+  .empty-text {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* ── STATUS ROW ── */
+  .status-footer {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--bg-deep);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+  }
+
+  .status-footer span { display: flex; align-items: center; gap: 6px; }
+
+  /* ── NOTIFICATION TOAST ── */
+  .toast-container {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--bg-card);
+    border: 1px solid var(--border-bright);
+    border-left: 3px solid var(--amber);
+    padding: 14px 18px;
+    min-width: 280px;
+    max-width: 360px;
+    animation: toastIn 0.3s ease;
+    pointer-events: all;
+  }
+
+  .toast.success { border-left-color: var(--green); }
+  .toast.danger { border-left-color: var(--red); }
+  .toast.badtide { border-left-color: var(--badtide); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .toast-title {
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .toast-msg {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+  }
+
+  /* ── WEBHOOK TEST RESULT ── */
+  .webhook-result {
+    display: none;
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .webhook-result.show { display: block; }
+
+  /* ── SCROLLBAR GLOBAL ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-deep); }
+  ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── TOAST CONTAINER ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── CONNECT MODAL ── -->
+<div class="modal-overlay" id="connectModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2>🦫 CONNECT TO COLONY</h2>
+    <p>
+      Enter the URL of your local BeaverOps relay.<br><br>
+      <strong style="color:var(--amber)">Option 1 — Local network only:</strong><br>
+      Download and run the <a href="https://github.com/kodatcg/beaverops/releases" target="_blank">BeaverOps Agent</a>,
+      then enter <code style="color:var(--amber)">http://localhost:3000</code><br><br>
+      <strong style="color:var(--amber)">Option 2 — Any device/network:</strong><br>
+      Run the agent, then use <a href="https://ngrok.com" target="_blank">Ngrok</a> or
+      <a href="https://pinggy.io" target="_blank">Pinggy</a> to expose it and paste the public URL here.
+    </p>
+    <div class="form-group">
+      <label class="form-label">Game Server URL</label>
+      <input class="form-input" id="serverUrlInput" type="text" value="http://localhost:3000" placeholder="http://localhost:3000" />
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeModal()">CANCEL</button>
+      <button class="btn btn-primary" onclick="saveAndConnect()">CONNECT 🦫</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-beaver">🦫</span>
+      <div class="logo-text">
+        <span class="logo-title">BeaverOps</span>
+        <span class="logo-sub">Timberborn Colony Dashboard</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="connection-pill" onclick="openModal()">
+        <div class="conn-dot" id="connDot"></div>
+        <span id="connLabel">NOT CONNECTED</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN ── -->
+<div class="main">
+
+  <!-- Alert banners -->
+  <div class="alert-banner badtide" id="badtideAlert">
+    <span class="alert-icon">☣️</span>
+    <div>
+      <strong>BADTIDE DETECTED</strong> — Contamination sensor active. Deploy antidote reserves. Beavers are at risk.
+    </div>
+  </div>
+  <div class="alert-banner drought" id="droughtAlert">
+    <span class="alert-icon">☀️</span>
+    <div>
+      <strong>DROUGHT IN PROGRESS</strong> — Water levels falling. Check your reservoir capacity and floodgates.
+    </div>
+  </div>
+
+  <!-- Hero: Is it a Badtide? -->
+  <div class="badtide-hero safe-state" id="badtideHero">
+    <div class="hero-bg-text" id="heroBgText">ALL CLEAR</div>
+    <div class="hero-content">
+      <div class="hero-icon" id="heroIcon">🦫</div>
+      <div class="hero-text">
+        <div class="hero-status-label">COLONY THREAT LEVEL</div>
+        <div class="hero-status-main" id="heroStatusMain">ALL CLEAR</div>
+        <div class="hero-status-sub" id="heroStatusSub">
+          Beavers are happy and hydrated. No badtide detected. No drought in progress.
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="statLevers">—</div>
+          <div class="hero-stat-lbl">Levers</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="statAdapters">—</div>
+          <div class="hero-stat-lbl">Adapters</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val" id="statActive">—</div>
+          <div class="hero-stat-lbl">Active</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Per-adapter alert banners (dynamically inserted here) -->
+  <div id="adapterAlertContainer"></div>
+
+  <!-- Levers + Adapters -->
+  <div class="grid-2">
+
+    <!-- LEVERS PANEL -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="panel-title-icon">🔧</span>
+          HTTP LEVERS
+        </div>
+        <span class="panel-badge" id="leverCountBadge">0 LEVERS</span>
+      </div>
+      <div class="panel-body">
+        <div class="levers-list" id="leversList">
+          <div class="empty-state">
+            <div class="empty-icon">🔌</div>
+            <div class="empty-text">No levers found.<br>Build an HTTP Lever in-game and connect.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADAPTERS PANEL -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="panel-title-icon">📡</span>
+          HTTP ADAPTERS
+        </div>
+        <span class="panel-badge" id="adapterCountBadge">0 ADAPTERS</span>
+      </div>
+      <div class="panel-body">
+        <div class="adapters-list" id="adaptersList">
+          <div class="empty-state">
+            <div class="empty-icon">📻</div>
+            <div class="empty-text">No adapters found.<br>Build an HTTP Adapter in-game and connect.</div>
+          </div>
+        </div>
+      </div>
+      <div class="refresh-bar">
+        <span class="refresh-label">NEXT POLL</span>
+        <div class="refresh-progress">
+          <div class="refresh-progress-bar" id="refreshBar"></div>
+        </div>
+        <span class="refresh-countdown" id="refreshCountdown">5s</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Timeline + Discord alerts -->
+  <div class="grid-2">
+
+    <!-- AUTOMATION MONITOR -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="panel-title-icon">📜</span>
+          AUTOMATION MONITOR
+        </div>
+        <button class="test-btn" style="width:auto;padding:4px 12px;font-size:0.6rem;" onclick="clearTimeline()">CLEAR</button>
+      </div>
+      <div class="panel-body" style="padding:0 20px 0 20px;">
+        <div class="timeline" id="timeline">
+          <div class="timeline-empty">Waiting for activity... Connect your colony to begin monitoring.</div>
+        </div>
+      </div>
+      <div class="status-footer">
+        <span>📊 <span id="eventCount">0</span> EVENTS LOGGED</span>
+        <span>⏱ POLLING EVERY <span id="pollInterval">5</span>s</span>
+      </div>
+    </div>
+
+    <!-- DISCORD / WEBHOOK ALERTS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span class="panel-title-icon">🔔</span>
+          ALERT WEBHOOKS
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="alert-config">
+          <div class="config-row">
+            <label class="config-label">🎮 Discord Webhook URL</label>
+            <input class="config-input" id="discordWebhook" type="text" placeholder="https://discord.com/api/webhooks/..." />
+          </div>
+          <div class="config-row">
+            <label class="config-label">💬 Slack Webhook URL</label>
+            <input class="config-input" id="slackWebhook" type="text" placeholder="https://hooks.slack.com/services/..." />
+          </div>
+          <div class="config-toggles">
+            <div class="config-toggle-row">
+              <span class="config-toggle-label">☣️ Alert on Badtide start</span>
+              <label class="mini-toggle">
+                <input type="checkbox" id="alertBadtide" checked>
+                <div class="mini-toggle-track"></div>
+                <div class="mini-toggle-thumb"></div>
+              </label>
+            </div>
+            <div class="config-toggle-row">
+              <span class="config-toggle-label">☀️ Alert on Drought start</span>
+              <label class="mini-toggle">
+                <input type="checkbox" id="alertDrought" checked>
+                <div class="mini-toggle-track"></div>
+                <div class="mini-toggle-thumb"></div>
+              </label>
+            </div>
+            <div class="config-toggle-row">
+              <span class="config-toggle-label">✅ Alert on All-Clear</span>
+              <label class="mini-toggle">
+                <input type="checkbox" id="alertClear">
+                <div class="mini-toggle-track"></div>
+                <div class="mini-toggle-thumb"></div>
+              </label>
+            </div>
+            <div class="config-toggle-row">
+              <span class="config-toggle-label">🔧 Alert on Lever changes</span>
+              <label class="mini-toggle">
+                <input type="checkbox" id="alertLevers">
+                <div class="mini-toggle-track"></div>
+                <div class="mini-toggle-thumb"></div>
+              </label>
+            </div>
+          </div>
+          <button class="test-btn" onclick="sendTestWebhook()">🧪 SEND TEST ALERT</button>
+          <div class="webhook-result" id="webhookResult"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+// When running via start.bat/start.sh, the proxy is on port 3000
+// and forwards to the game on 8080 automatically — no CORS issues.
+// Migrate: if saved URL points directly to game on :8080, reset to proxy on :3000
+let _savedUrl = localStorage.getItem('tb_server');
+if (_savedUrl && _savedUrl.includes(':8080')) { localStorage.removeItem('tb_server'); _savedUrl = null; }
+// If opening from a network device (tablet/phone), use the host we were served from
+// so we don't try to hit localhost on the tablet itself
+const _defaultHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:3000'
+  : `http://${window.location.hostname}:3000`;
+let serverUrl = _savedUrl || _defaultHost;
+let connected = false;
+let pollTimer = null;
+let pollCountdown = 5;
+let totalEvents = 0;
+const POLL_INTERVAL = 5000;
+
+// Prev state for change detection
+let prevLevers = {};
+let prevAdapters = {};
+let prevThreatLevel = 'safe';
+
+
+// ═══════════════════════════════════════════════════════════
+// FETCH WITH TIMEOUT
+// ═══════════════════════════════════════════════════════════
+async function fetchWithTimeout(url, ms = 4000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: controller.signal, mode: 'cors' });
+    clearTimeout(id);
+    return res;
+  } catch (e) {
+    clearTimeout(id);
+    throw e;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FETCH GAME DATA
+// ═══════════════════════════════════════════════════════════
+async function fetchGameData() {
+  try {
+    const [leversRes, adaptersRes] = await Promise.all([
+      fetchWithTimeout(`${serverUrl}/api/levers`),
+      fetchWithTimeout(`${serverUrl}/api/adapters`)
+    ]);
+
+    if (!leversRes.ok || !adaptersRes.ok) throw new Error('Bad response');
+
+    const levers = await leversRes.json();
+    const adapters = await adaptersRes.json();
+    return { ok: true, levers, adapters };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════════
+function renderLevers(levers) {
+  const list = document.getElementById('leversList');
+  document.getElementById('leverCountBadge').textContent = `${levers.length} LEVER${levers.length !== 1 ? 'S' : ''}`;
+
+  if (!levers.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🔌</div>
+      <div class="empty-text">No levers found.<br>Build an HTTP Lever in-game.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = levers.map(l => `
+    <div class="lever-row" id="leverrow-${CSS.escape(l.name)}">
+      <div class="lever-indicator ${l.state ? 'on' : 'off'}"></div>
+      <span class="lever-name">${l.name}</span>
+      ${l.springReturn ? '<span class="lever-spring-badge">SPRING</span>' : ''}
+      <div class="lever-controls">
+        <label class="lever-toggle">
+          <input type="checkbox" ${l.state ? 'checked' : ''} onchange="toggleLever('${l.name.replace(/'/g,"\\'")}', this.checked)">
+          <div class="lever-toggle-track"></div>
+          <div class="lever-toggle-thumb"></div>
+        </label>
+        <div style="position:relative">
+          <div class="color-btn" style="background:${getLeverColor(l.name)}" onclick="openColorPicker('${l.name.replace(/'/g,"\\'")}', this)" title="Change color"></div>
+          <input type="color" class="color-picker-input" id="colorpicker-${l.name}" value="${getLeverColor(l.name)}" oninput="applyColor('${l.name.replace(/'/g,"\\'")}', this.value)" onchange="applyColor('${l.name.replace(/'/g,"\\'")}', this.value)">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function getLeverColor(name) {
+  return localStorage.getItem(`tb_color_${name}`) || '#f59e0b';
+}
+
+function openColorPicker(name, btn) {
+  const input = document.getElementById(`colorpicker-${name}`);
+  if (input) input.click();
+}
+
+function applyColor(name, hex) {
+  localStorage.setItem(`tb_color_${name}`, hex);
+  const btn = document.querySelector(`#leverrow-${CSS.escape(name)} .color-btn`);
+  if (btn) btn.style.background = hex;
+
+  const cleanHex = hex.replace('#', '');
+  fetchWithTimeout(`${serverUrl}/api/color/${encodeURIComponent(name)}/${cleanHex}`)
+    .catch(e => addTimelineEntry('warn', `Color change failed for <strong>${name}</strong>`));
+
+  addTimelineEntry('lever', `Color changed → <strong>${name}</strong> to <span style="color:${hex}">${hex}</span>`);
+}
+
+function renderAdapters(adapters) {
+  const list = document.getElementById('adaptersList');
+  document.getElementById('adapterCountBadge').textContent = `${adapters.length} ADAPTER${adapters.length !== 1 ? 'S' : ''}`;
+
+  const activeCount = adapters.filter(a => a.state).length;
+  document.getElementById('statAdapters').textContent = adapters.length;
+  document.getElementById('statActive').textContent = activeCount;
+
+  if (!adapters.length) {
+    list.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📻</div>
+      <div class="empty-text">No adapters found.<br>Build an HTTP Adapter in-game.</div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = adapters.map(a => {
+    const alertEnabled = getAdapterAlertEnabled(a.name);
+    return `
+    <div class="adapter-row">
+      <div class="adapter-led ${a.state ? 'active' : 'inactive'}"></div>
+      <span class="adapter-name">${a.name}</span>
+      <span class="adapter-state-badge ${a.state ? 'on' : 'off'}">${a.state ? 'ACTIVE' : 'SILENT'}</span>
+      <label class="mini-toggle" title="Alert on trigger">
+        <input type="checkbox" ${alertEnabled ? 'checked' : ''} onchange="setAdapterAlertEnabled('${a.name.replace(/'/g,"\\'")}', this.checked)">
+        <div class="mini-toggle-track"></div>
+        <div class="mini-toggle-thumb"></div>
+      </label>
+      <span class="adapter-alert-icon" style="opacity:${alertEnabled ? 1 : 0.25}" title="Webhook alert ${alertEnabled ? 'ON' : 'OFF'}">🔔</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// PER-ADAPTER ALERTS
+// ═══════════════════════════════════════════════════════════
+function getAdapterAlertEnabled(name) {
+  return localStorage.getItem(`tb_adapter_alert_${name}`) === 'true';
+}
+
+function setAdapterAlertEnabled(name, enabled) {
+  localStorage.setItem(`tb_adapter_alert_${name}`, enabled);
+  // Update the bell icon immediately without full re-render
+  const rows = document.querySelectorAll('.adapter-row');
+  rows.forEach(row => {
+    const nameEl = row.querySelector('.adapter-name');
+    if (nameEl && nameEl.textContent === name) {
+      const bell = row.querySelector('.adapter-alert-icon');
+      if (bell) bell.style.opacity = enabled ? '1' : '0.25';
+    }
+  });
+  addTimelineEntry('info', `Webhook alert ${enabled ? 'enabled' : 'disabled'} for <strong>${name}</strong>`);
+}
+
+function checkAdapterAlerts(newAdapterMap) {
+  Object.keys(newAdapterMap).forEach(name => {
+    const isActive = newAdapterMap[name];
+    const wasActive = prevAdapters[name];
+    const alertEnabled = getAdapterAlertEnabled(name);
+
+    if (alertEnabled) {
+      // Flipped ON — fire webhook + show banner
+      if (isActive === true && wasActive === false) {
+        fireWebhook(`📡 **Adapter triggered: ${name}** — signal is now active in your Timberborn colony!`, '📡');
+        showToast('Adapter Alert', `📡 ${name} just triggered!`, '');
+        addTimelineEntry('warn', `🔔 Webhook fired for adapter → <strong>${name}</strong>`);
+      }
+    }
+  });
+
+  // Rebuild adapter alert banners for all active+alerted adapters
+  updateAdapterAlertBanners(newAdapterMap);
+}
+
+function updateAdapterAlertBanners(adapterMap) {
+  const container = document.getElementById('adapterAlertContainer');
+  if (!container) return;
+
+  const activeAlerts = Object.keys(adapterMap).filter(name =>
+    adapterMap[name] === true && getAdapterAlertEnabled(name)
+  );
+
+  // Clear existing adapter banners
+  container.innerHTML = '';
+
+  activeAlerts.forEach(name => {
+    const div = document.createElement('div');
+    div.className = 'alert-banner adapter show';
+    div.innerHTML = `
+      <span class="alert-icon">📡</span>
+      <div><strong>${name}</strong> — adapter signal is active</div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// THREAT LEVEL
+// ═══════════════════════════════════════════════════════════
+function computeThreatLevel(adapters) {
+  const badtideKeywords = ['badtide', 'contaminat', 'toxic', 'bad water', 'badwater'];
+  const droughtKeywords = ['drought', 'dry', 'water low', 'water level', 'desicc'];
+
+  const isBadtide = adapters.some(a =>
+    a.state && badtideKeywords.some(k => a.name.toLowerCase().includes(k))
+  );
+  const isDrought = adapters.some(a =>
+    a.state && droughtKeywords.some(k => a.name.toLowerCase().includes(k))
+  );
+
+  if (isBadtide && isDrought) return 'both';
+  if (isBadtide) return 'badtide';
+  if (isDrought) return 'drought';
+  return 'safe';
+}
+
+function updateThreatDisplay(level, adapters) {
+  const hero = document.getElementById('badtideHero');
+  const bgText = document.getElementById('heroBgText');
+  const icon = document.getElementById('heroIcon');
+  const main = document.getElementById('heroStatusMain');
+  const sub = document.getElementById('heroStatusSub');
+  const badtideAlert = document.getElementById('badtideAlert');
+  const droughtAlert = document.getElementById('droughtAlert');
+
+  const stateClass = { badtide: 'danger-state', drought: 'drought-state', both: 'both-state', safe: 'safe-state' };
+  hero.className = `badtide-hero ${stateClass[level] || 'safe-state'}`;
+
+  if (level === 'both') {
+    bgText.textContent = 'CRITICAL!';
+    icon.textContent = '🚨';
+    main.textContent = 'BADTIDE + DROUGHT';
+    sub.textContent = 'Double disaster! Contamination AND drought active simultaneously. All paws on deck.';
+    badtideAlert.classList.add('show');
+    droughtAlert.classList.add('show');
+  } else if (level === 'badtide') {
+    bgText.textContent = 'BADTIDE!';
+    icon.textContent = '☣️';
+    main.textContent = 'BADTIDE DETECTED';
+    sub.textContent = 'Contamination active. Deploy antidote. Keep beavers away from water sources.';
+    badtideAlert.classList.add('show');
+    droughtAlert.classList.remove('show');
+  } else if (level === 'drought') {
+    bgText.textContent = 'DROUGHT';
+    icon.textContent = '☀️';
+    main.textContent = 'DROUGHT IN PROGRESS';
+    sub.textContent = 'Water levels falling. Check reservoir capacity. Open floodgates as needed.';
+    badtideAlert.classList.remove('show');
+    droughtAlert.classList.add('show');
+  } else {
+    bgText.textContent = 'ALL CLEAR';
+    icon.textContent = '🦫';
+    main.textContent = 'ALL CLEAR';
+    sub.textContent = 'Beavers are happy and hydrated. No badtide detected. No drought in progress.';
+    badtideAlert.classList.remove('show');
+    droughtAlert.classList.remove('show');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHANGE DETECTION + TIMELINE
+// ═══════════════════════════════════════════════════════════
+function detectChanges(levers, adapters) {
+  const newLeverMap = {};
+  levers.forEach(l => newLeverMap[l.name] = l.state);
+
+  const newAdapterMap = {};
+  adapters.forEach(a => newAdapterMap[a.name] = a.state);
+
+  // Lever changes
+  Object.keys(newLeverMap).forEach(name => {
+    if (prevLevers[name] !== undefined && prevLevers[name] !== newLeverMap[name]) {
+      const action = newLeverMap[name] ? 'ON ✅' : 'OFF ⚫';
+      addTimelineEntry('lever', `Lever switched → <strong>${name}</strong> is now ${action}`);
+      if (document.getElementById('alertLevers')?.checked) {
+        fireWebhook(`🔧 Lever changed: **${name}** → ${newLeverMap[name] ? 'ON' : 'OFF'}`, newLeverMap[name] ? '🟢' : '⚫');
+      }
+    }
+  });
+
+  // Adapter changes
+  Object.keys(newAdapterMap).forEach(name => {
+    if (prevAdapters && prevAdapters[name] !== undefined && prevAdapters[name] !== newAdapterMap[name]) {
+      const action = newAdapterMap[name] ? 'triggered 🔴' : 'cleared ✅';
+      addTimelineEntry(newAdapterMap[name] ? 'warn' : 'ok', `Adapter signal → <strong>${name}</strong> ${action}`);
+    }
+  });
+
+  // Per-adapter webhook alerts
+  checkAdapterAlerts(newAdapterMap);
+
+  // Threat level changes
+  const newThreatLevel = computeThreatLevel(adapters);
+  if (prevThreatLevel !== newThreatLevel) {
+    if (newThreatLevel === 'both') {
+      addTimelineEntry('danger', '🚨 <strong>DOUBLE DISASTER</strong> — Badtide AND Drought simultaneously!');
+      if (document.getElementById('alertBadtide')?.checked || document.getElementById('alertDrought')?.checked) {
+        fireWebhook('🚨 **DOUBLE DISASTER** — Badtide AND Drought active at the same time! All paws on deck!', '🚨');
+      }
+      showToast('DOUBLE DISASTER!', '🚨 Badtide + Drought simultaneously. Good luck.', 'badtide');
+    } else if (newThreatLevel === 'badtide') {
+      addTimelineEntry('danger', '☣️ <strong>BADTIDE DETECTED</strong> — contamination sensor triggered!');
+      if (document.getElementById('alertBadtide')?.checked) {
+        fireWebhook('☣️ **BADTIDE DETECTED** in your Timberborn colony! Deploy antidote immediately!', '🚨');
+      }
+      showToast('BADTIDE!', '☣️ Contamination detected. Beavers at risk!', 'badtide');
+    } else if (newThreatLevel === 'drought') {
+      addTimelineEntry('warn', '☀️ <strong>DROUGHT STARTED</strong> — water levels falling');
+      if (document.getElementById('alertDrought')?.checked) {
+        fireWebhook('☀️ **DROUGHT IN PROGRESS** in your Timberborn colony! Check water reserves!', '⚠️');
+      }
+      showToast('DROUGHT', '☀️ Water levels falling. Check your reservoirs!', 'danger');
+    } else if (prevThreatLevel !== 'safe') {
+      addTimelineEntry('ok', '✅ <strong>ALL CLEAR</strong> — threat conditions resolved');
+      if (document.getElementById('alertClear')?.checked) {
+        fireWebhook('✅ **All Clear** — Timberborn colony threat resolved. Beavers are safe!', '🦫');
+      }
+    }
+    prevThreatLevel = newThreatLevel;
+    updateThreatDisplay(newThreatLevel, adapters);
+  }
+
+  prevLevers = newLeverMap;
+  prevAdapters = newAdapterMap;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TIMELINE ENTRIES
+// ═══════════════════════════════════════════════════════════
+function addTimelineEntry(type, msg) {
+  const timeline = document.getElementById('timeline');
+  const empties = timeline.querySelectorAll('.timeline-empty');
+  empties.forEach(e => e.remove());
+
+  const now = new Date();
+  const time = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+  const entry = document.createElement('div');
+  entry.className = 'timeline-entry';
+  entry.innerHTML = `
+    <span class="timeline-time">${time}</span>
+    <div class="timeline-dot ${type}"></div>
+    <span class="timeline-msg">${msg}</span>
+  `;
+
+  timeline.insertBefore(entry, timeline.firstChild);
+  totalEvents++;
+  document.getElementById('eventCount').textContent = totalEvents;
+
+  // Keep max 100 entries
+  while (timeline.children.length > 100) {
+    timeline.removeChild(timeline.lastChild);
+  }
+}
+
+function clearTimeline() {
+  const timeline = document.getElementById('timeline');
+  timeline.innerHTML = '<div class="timeline-empty">Timeline cleared.</div>';
+  totalEvents = 0;
+  document.getElementById('eventCount').textContent = 0;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LEVER TOGGLE
+// ═══════════════════════════════════════════════════════════
+async function toggleLever(name, on) {
+  try {
+    const endpoint = on ? 'switch-on' : 'switch-off';
+    const res = await fetchWithTimeout(`${serverUrl}/api/${endpoint}/${encodeURIComponent(name)}`);
+    if (res.ok) {
+      addTimelineEntry('lever', `Lever set → <strong>${name}</strong> ${on ? 'ON ✅' : 'OFF ⚫'}`);
+      showToast('Lever Updated', `${name} is now ${on ? 'ON' : 'OFF'}`, 'success');
+    } else {
+      throw new Error('Server returned error');
+    }
+  } catch (e) {
+    addTimelineEntry('warn', `❌ Lever toggle failed for <strong>${name}</strong>: ${e.message}`);
+    showToast('Toggle Failed', e.message, 'danger');
+    // Revert the toggle visually
+    fetchGameData().then(d => { if(d.ok) renderLevers(d.levers); });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// WEBHOOKS
+// ═══════════════════════════════════════════════════════════
+async function fireWebhook(message, emoji) {
+  const discord = document.getElementById('discordWebhook').value.trim();
+  const slack = document.getElementById('slackWebhook').value.trim();
+
+  if (discord) {
+    try {
+      await fetch(discord, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'BeaverOps 🦫',
+          content: `${emoji} **BeaverOps Alert** — ${message}`,
+          embeds: [{
+            color: message.includes('BADTIDE') ? 0x22c55e :
+                   message.includes('DROUGHT') ? 0xfb923c : 0x4ade80,
+            footer: { text: 'BeaverOps — Timberborn Colony Monitor' }
+          }]
+        })
+      });
+    } catch(e) {}
+  }
+
+  if (slack) {
+    try {
+      await fetch(slack, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: `${emoji} *BeaverOps Alert* — ${message}` })
+      });
+    } catch(e) {}
+  }
+}
+
+async function sendTestWebhook() {
+  const result = document.getElementById('webhookResult');
+  const discord = document.getElementById('discordWebhook').value.trim();
+  const slack = document.getElementById('slackWebhook').value.trim();
+
+  if (!discord && !slack) {
+    result.className = 'webhook-result show';
+    result.textContent = '⚠️ Enter at least one webhook URL first.';
+    return;
+  }
+
+  result.className = 'webhook-result show';
+  result.textContent = '⏳ Sending test alert...';
+
+  const testMsg = '🧪 **Test Alert** — BeaverOps is connected and monitoring your colony. Your beavers are safe... for now. 🦫';
+
+  await fireWebhook(testMsg, '🧪');
+
+  result.textContent = '✅ Test alert sent! Check your Discord/Slack.';
+  addTimelineEntry('info', '🧪 Test webhook alert fired manually');
+}
+
+// ═══════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════
+function showToast(title, msg, type = '') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.innerHTML = `<div class="toast-title">${title}</div><div class="toast-msg">${msg}</div>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(20px)';
+    toast.style.transition = 'all 0.3s';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// POLLING LOOP
+// ═══════════════════════════════════════════════════════════
+async function poll() {
+  const data = await fetchGameData();
+
+  if (data.ok) {
+    if (!connected) {
+      connected = true;
+      setConnState('connected', serverUrl.replace('http://', ''));
+      addTimelineEntry('ok', `✅ Connected to <strong>${serverUrl}</strong>`);
+    }
+
+    detectChanges(data.levers, data.adapters);
+
+    renderLevers(data.levers);
+    renderAdapters(data.adapters);
+    document.getElementById('statLevers').textContent = data.levers.length;
+
+    // Update per-adapter banners (always, not just on change)
+    const adapterMap = {};
+    data.adapters.forEach(a => adapterMap[a.name] = a.state);
+    updateAdapterAlertBanners(adapterMap);
+
+    // Compute threat from adapters
+    const threat = computeThreatLevel(data.adapters);
+    updateThreatDisplay(threat, data.adapters);
+  } else {
+    if (connected) {
+      connected = false;
+      addTimelineEntry('warn', `❌ Lost connection to game server`);
+    }
+    setConnState('error', 'DISCONNECTED');
+    setConnState('error', 'CONN. FAILED');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// REFRESH BAR
+// ═══════════════════════════════════════════════════════════
+function startRefreshBar() {
+  const bar = document.getElementById('refreshBar');
+  const countdown = document.getElementById('refreshCountdown');
+  let start = Date.now();
+  let last = 0;
+
+  function animFrame(ts) {
+    const elapsed = Date.now() - start;
+    const pct = Math.min((elapsed / POLL_INTERVAL) * 100, 100);
+    bar.style.width = pct + '%';
+    const remaining = Math.max(0, Math.ceil((POLL_INTERVAL - elapsed) / 1000));
+    if (remaining !== last) {
+      countdown.textContent = remaining + 's';
+      last = remaining;
+    }
+    if (elapsed < POLL_INTERVAL) requestAnimationFrame(animFrame);
+  }
+
+  requestAnimationFrame(animFrame);
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  poll();
+  startRefreshBar();
+
+  pollTimer = setInterval(() => {
+    poll();
+    startRefreshBar();
+  }, POLL_INTERVAL);
+}
+
+// ═══════════════════════════════════════════════════════════
+// CONNECTION STATE UI
+// ═══════════════════════════════════════════════════════════
+function setConnState(state, label) {
+  const dot = document.getElementById('connDot');
+  const lbl = document.getElementById('connLabel');
+  dot.className = `conn-dot ${state}`;
+  lbl.textContent = label;
+}
+
+
+
+// Close modal on overlay click
+document.getElementById('connectModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// Save webhook config to localStorage
+document.getElementById('discordWebhook').addEventListener('change', () => {
+  localStorage.setItem('tb_discord', document.getElementById('discordWebhook').value);
+});
+document.getElementById('slackWebhook').addEventListener('change', () => {
+  localStorage.setItem('tb_slack', document.getElementById('slackWebhook').value);
+});
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+function init() {
+  // Restore saved values
+  const savedDiscord = localStorage.getItem('tb_discord');
+  const savedSlack = localStorage.getItem('tb_slack');
+  if (savedDiscord) document.getElementById('discordWebhook').value = savedDiscord;
+  if (savedSlack) document.getElementById('slackWebhook').value = savedSlack;
+  else {
+    setConnState('connecting', 'CONNECTING...');
+    addTimelineEntry('info', `🔌 Connecting to <strong>${serverUrl}</strong>...`);
+  }
+
+  startPolling();
+}
+
+init();
+</script>
+</body>
+</html>
