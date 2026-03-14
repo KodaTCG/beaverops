@@ -1038,6 +1038,80 @@
 
   .webhook-result.show { display: block; }
 
+  /* ── DOWNLOAD SECTION ── */
+  .download-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 20px 28px;
+    margin-bottom: 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-bright);
+    border-left: 3px solid var(--amber);
+    border-radius: var(--radius);
+  }
+
+  .download-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .download-icon { font-size: 2rem; }
+
+  .download-text { display: flex; flex-direction: column; gap: 3px; }
+
+  .download-title {
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--wood-pale);
+  }
+
+  .download-sub {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+  }
+
+  .download-actions { display: flex; gap: 10px; align-items: center; }
+
+  .download-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 9px 18px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+    border: 1px solid;
+  }
+
+  .download-btn-primary {
+    background: var(--amber);
+    color: var(--bg-deep);
+    border-color: var(--amber);
+    font-weight: 700;
+  }
+
+  .download-btn-primary:hover { background: var(--amber-glow); transform: translateY(-1px); }
+
+  .download-btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-bright);
+  }
+
+  .download-btn-ghost:hover { border-color: var(--wood-light); color: var(--text-primary); }
+
   /* ── SCROLLBAR GLOBAL ── */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg-deep); }
@@ -1135,6 +1209,25 @@
           <div class="hero-stat-lbl">Active</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Download Section -->
+  <div class="download-section" id="downloadSection">
+    <div class="download-left">
+      <div class="download-icon">🦫</div>
+      <div class="download-text">
+        <div class="download-title">BeaverOps Agent Required</div>
+        <div class="download-sub">Run the agent on your gaming PC to connect your colony to this dashboard.</div>
+      </div>
+    </div>
+    <div class="download-actions">
+      <a class="download-btn download-btn-primary" href="https://github.com/KodaTCG/beaverops/raw/main/BeaverOpsAgent.exe" download>
+        ⬇ Download Agent (.exe)
+      </a>
+      <a class="download-btn download-btn-ghost" href="https://github.com/KodaTCG/beaverops/raw/main/BeaverOpsAgent.zip" download>
+        ⬇ Python version
+      </a>
     </div>
   </div>
 
@@ -1357,6 +1450,9 @@ function handleRelayMessage(msg) {
     setConnState('connected', sessionCode);
     addTimelineEntry('ok', '🦫 <strong>Agent connected</strong> — colony data incoming!');
     showToast('Agent Connected', '🦫 BeaverOps Agent is live. Colony data incoming!', 'success');
+    // Hide the download prompt once agent is connected
+    const dl = document.getElementById('downloadSection');
+    if (dl) dl.style.display = 'none';
   }
 
   else if (type === 'peer_disconnected') {
@@ -1364,6 +1460,8 @@ function handleRelayMessage(msg) {
     setConnState('connecting', 'AGENT OFFLINE');
     addTimelineEntry('warn', '⚠️ Agent disconnected — is the game still running?');
     showToast('Agent Disconnected', 'BeaverOps Agent went offline.', 'danger');
+    const dl = document.getElementById('downloadSection');
+    if (dl) dl.style.display = 'flex';
   }
 
   else if (type === 'game_data') {
