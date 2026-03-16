@@ -1309,9 +1309,10 @@
         <div class="conn-dot" id="connDot"></div>
         <span id="connLabel">NOT CONNECTED</span>
       </div>
-      <button class="disconnect-btn" id="disconnectBtn" onclick="disconnect()" title="Disconnect and change code" style="display:none">
-        ✕ DISCONNECT
-      </button>
+      <div class="connection-pill" id="disconnectBtn" onclick="disconnect()" title="Disconnect" style="display:none;cursor:pointer;border-color:#5a2020;color:var(--red)">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);flex-shrink:0"></div>
+        <span>DISCONNECT</span>
+      </div>
     </div>
   </div>
 </header>
@@ -2169,6 +2170,33 @@ function connectFromScreen() {
 }
 
 // Allow changing code via the connection pill too
+function disconnect() {
+  if (ws) { try { ws.close(); } catch(e) {} ws = null; }
+  sessionCode = '';
+  localStorage.removeItem('tb_session_code');
+  connected = false;
+  agentConnected = false;
+  prevLevers = {};
+  prevAdapters = {};
+  // Hide disconnect button
+  document.getElementById('disconnectBtn').style.display = 'none';
+  // Reset panels
+  document.getElementById('leversList').innerHTML = '<div class="empty-state"><div class="empty-icon">🔌</div><div class="empty-text">No levers found.<br>Connect your colony to begin.</div></div>';
+  document.getElementById('adaptersList').innerHTML = '<div class="empty-state"><div class="empty-icon">📻</div><div class="empty-text">No adapters found.<br>Connect your colony to begin.</div></div>';
+  document.getElementById('adapterAlertContainer').innerHTML = '';
+  document.getElementById('statLevers').textContent = '—';
+  document.getElementById('statAdapters').textContent = '—';
+  document.getElementById('statActive').textContent = '—';
+  updateThreatDisplay('safe', []);
+  setConnState('error', 'NO SESSION');
+  // Show entry screen
+  document.getElementById('sessionScreen').classList.remove('hidden');
+  document.getElementById('sessionCodeMain').value = '';
+  // Show download section again
+  const dl = document.getElementById('downloadSection');
+  if (dl) dl.style.display = 'flex';
+}
+
 function saveAndConnectCode() {
   const input = document.getElementById('sessionCodeInput').value.trim().toUpperCase();
   if (!input || input.length < 9) {
