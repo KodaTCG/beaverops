@@ -14,7 +14,7 @@ import os
 import threading
 import urllib.request
 import urllib.error
-import socket
+import urllib.parse
 
 # ── Try to import websocket-client, install if missing ──────────────────────
 try:
@@ -22,22 +22,32 @@ try:
 except ImportError:
     print("  Installing required package (websocket-client)...")
     import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "websocket-client", "--quiet", "--break-system-packages"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "websocket-client", "--quiet"])
     import websocket
 
 # ── Config ───────────────────────────────────────────────────────────────────
-GAME_URL      = "http://localhost:8080"
-RELAY_URL     = "wss://beaverops-relay.beaverops-relay.workers.dev"
-POLL_INTERVAL = 5  # seconds between game polls
-RECONNECT_DELAY = 5  # seconds between relay reconnect attempts
+GAME_URL        = "http://localhost:8080"
+RELAY_HTTP_URL  = "https://beaverops-relay.kodatcg.workers.dev"
+RELAY_WS_URL    = "wss://beaverops-relay.kodatcg.workers.dev"
+POLL_INTERVAL   = 5
+RECONNECT_DELAY = 5
 
 # ── State ────────────────────────────────────────────────────────────────────
-ws_conn       = None
-session_code  = None
-running       = True
+ws_conn             = None
+session_code        = None
+running             = True
 dashboard_connected = False
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+def safe_input(prompt):
+    """input() that won't crash when stdin is unavailable (compiled exe)."""
+    try:
+        return input(prompt)
+    except Exception:
+        time.sleep(5)
+        return ""
+
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
 
@@ -51,17 +61,17 @@ def print_status():
     if session_code:
         print(f"  Your session code:  {session_code}")
         print()
-        print("  Open beaverops.com and enter this code")
-        print("  to view your colony dashboard.")
+        print("  Open beaverops.vercel.app and enter")
+        print("  this code to view your colony dashboard.")
         print()
-        print("  ─────────────────────────────────────────")
+        print("  ------------------------------------------")
         game_ok = check_game_quick()
-        print(f"  Game:      {'🟢 Connected' if game_ok else '🔴 Not running / no map loaded'}")
-        relay_ok = ws_conn and ws_conn.sock and ws_conn.sock.connected
-        print(f"  Relay:     {'🟢 Connected' if relay_ok else '🔴 Reconnecting...'}")
-        print(f"  Dashboard: {'🟢 Viewing' if dashboard_connected else '⚫ Not open'}")
+        relay_ok = ws_conn is not None and getattr(ws_conn, 'sock', None) is not None
+        print(f"  Game:      {'OK  - Connected' if game_ok else 'WAIT - Not running / no map loaded'}")
+        print(f"  Relay:     {'OK  - Connected' if relay_ok else 'WAIT - Reconnecting...'}")
+        print(f"  Dashboard: {'OK  - Viewing' if dashboard_connected else 'WAIT - Not open yet'}")
         print()
-        print("  ─────────────────────────────────────────")
+        print("  ------------------------------------------")
         print("  Press Ctrl+C to stop.")
     else:
         print("  Connecting to relay server...")
@@ -72,31 +82,29 @@ def check_game_quick():
         req = urllib.request.Request(f"{GAME_URL}/api/levers")
         with urllib.request.urlopen(req, timeout=2) as r:
             return r.status == 200
-    except:
+    except Exception:
         return False
 
 # ─────────────────────────────────────────────────────────────────────────────
+
 def fetch_game_data():
     """Poll the game and return combined data dict, or None if game not running."""
     try:
         def get(path):
             req = urllib.request.Request(f"{GAME_URL}{path}")
             with urllib.request.urlopen(req, timeout=4) as r:
-                return json.loads(r.read().decode())
+                data = json.loads(r.read().decode())
+                if isinstance(data, dict):
+                    data = [data]
+                return data
 
         levers   = get("/api/levers")
         adapters = get("/api/adapters")
-
-        # Normalize to lists in case game returns a single object
-        if isinstance(levers, dict):   levers   = [levers]
-        if isinstance(adapters, dict): adapters = [adapters]
-
         return {"levers": levers, "adapters": adapters}
-    except Exception as e:
+    except Exception:
         return None
 
 def send_lever_command(name, state):
-    """Send a lever on/off command to the game."""
     try:
         endpoint = "switch-on" if state else "switch-off"
         req = urllib.request.Request(
@@ -105,35 +113,30 @@ def send_lever_command(name, state):
         )
         with urllib.request.urlopen(req, timeout=4) as r:
             return r.status == 200
-    except Exception as e:
+    except Exception:
         return False
 
 def send_color_command(name, hex_color):
-    """Send a color change command to the game."""
     try:
-        import urllib.parse
         req = urllib.request.Request(
             f"{GAME_URL}/api/color/{urllib.parse.quote(name)}/{hex_color.lstrip('#')}",
             method="GET"
         )
         with urllib.request.urlopen(req, timeout=4) as r:
             return r.status == 200
-    except:
+    except Exception:
         return False
 
 # ─────────────────────────────────────────────────────────────────────────────
+
 def poll_and_push():
-    """Background thread: poll game every N seconds, push to dashboard via relay."""
-    import urllib.parse
+    """Background thread: poll game every N seconds, push to dashboard."""
     while running:
-        if ws_conn and ws_conn.sock and dashboard_connected:
+        if ws_conn and dashboard_connected:
             data = fetch_game_data()
             if data:
                 try:
-                    ws_conn.send(json.dumps({
-                        "type": "game_data",
-                        "payload": data
-                    }))
+                    ws_conn.send(json.dumps({"type": "game_data", "payload": data}))
                 except Exception:
                     pass
             else:
@@ -147,14 +150,12 @@ def poll_and_push():
         time.sleep(POLL_INTERVAL)
 
 # ─────────────────────────────────────────────────────────────────────────────
-def on_message(ws, message):
-    """Handle messages from the relay (forwarded from dashboard)."""
-    global dashboard_connected
-    import urllib.parse
 
+def on_message(ws, message):
+    global dashboard_connected
     try:
         msg = json.loads(message)
-    except:
+    except Exception:
         return
 
     msg_type = msg.get("type")
@@ -162,7 +163,6 @@ def on_message(ws, message):
     if msg_type == "peer_connected":
         dashboard_connected = True
         print_status()
-        # Immediately push fresh data
         data = fetch_game_data()
         if data:
             ws.send(json.dumps({"type": "game_data", "payload": data}))
@@ -175,13 +175,7 @@ def on_message(ws, message):
         name  = msg.get("name", "")
         state = msg.get("state", False)
         ok = send_lever_command(name, state)
-        ws.send(json.dumps({
-            "type": "lever_result",
-            "name": name,
-            "state": state,
-            "ok": ok
-        }))
-        # Push fresh data immediately after lever change
+        ws.send(json.dumps({"type": "lever_result", "name": name, "state": state, "ok": ok}))
         time.sleep(0.3)
         data = fetch_game_data()
         if data:
@@ -191,21 +185,15 @@ def on_message(ws, message):
         name  = msg.get("name", "")
         color = msg.get("color", "")
         ok = send_color_command(name, color)
-        ws.send(json.dumps({
-            "type": "color_result",
-            "name": name,
-            "color": color,
-            "ok": ok
-        }))
+        ws.send(json.dumps({"type": "color_result", "name": name, "color": color, "ok": ok}))
 
     elif msg_type == "poll_now":
-        # Dashboard requesting immediate data
         data = fetch_game_data()
         if data:
             ws.send(json.dumps({"type": "game_data", "payload": data}))
 
 def on_error(ws, error):
-    pass  # Handled in on_close / reconnect loop
+    pass
 
 def on_close(ws, close_status_code, close_msg):
     global dashboard_connected
@@ -213,27 +201,33 @@ def on_close(ws, close_status_code, close_msg):
     print_status()
 
 def on_open(ws):
-    global session_code
     print_status()
-    # Immediately push data if game is running
     data = fetch_game_data()
     if data:
         ws.send(json.dumps({"type": "game_data", "payload": data}))
 
 # ─────────────────────────────────────────────────────────────────────────────
+
 def get_session_code():
-    """Get a new session code from the relay server."""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
     try:
-        req = urllib.request.Request(f"{RELAY_URL.replace('wss://', 'https://').replace('ws://', 'http://')}/session")
-        with urllib.request.urlopen(req, timeout=10) as r:
+        req = urllib.request.Request(
+            f"{RELAY_HTTP_URL}/session",
+            headers={"User-Agent": "BeaverOpsAgent/1.0"}
+        )
+        with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
             data = json.loads(r.read().decode())
             return data.get("code")
     except Exception as e:
+        print(f"  [debug] failed: {type(e).__name__}: {e}")
         return None
 
 def connect_relay(code):
-    """Connect to the relay as the agent for this session code."""
-    url = f"{RELAY_URL}/relay/{code}/agent"
+    import ssl
+    url = f"{RELAY_WS_URL}/relay/{code}/agent"
     ws = websocket.WebSocketApp(
         url,
         on_open=on_open,
@@ -241,9 +235,12 @@ def connect_relay(code):
         on_error=on_error,
         on_close=on_close,
     )
+    # Store ssl_opt on the ws for use in run_forever
+    ws._ssl_opt = {"cert_reqs": ssl.CERT_NONE}
     return ws
 
 # ─────────────────────────────────────────────────────────────────────────────
+
 def main():
     global ws_conn, session_code, running
 
@@ -254,7 +251,6 @@ def main():
     print()
     print("  Getting session code from relay server...")
 
-    # Get a session code
     for attempt in range(5):
         code = get_session_code()
         if code:
@@ -268,23 +264,19 @@ def main():
         print("  ERROR: Could not reach the BeaverOps relay server.")
         print("  Check your internet connection and try again.")
         print()
-        input("  Press Enter to exit...")
+        safe_input("  Press Enter to exit...")
         sys.exit(1)
 
-    # Start poll-and-push thread
     poll_thread = threading.Thread(target=poll_and_push, daemon=True)
     poll_thread.start()
 
-    # Main loop: connect and reconnect
     print_status()
+
     while running:
         try:
             ws_conn = connect_relay(session_code)
-            ws_conn.run_forever(
-                ping_interval=30,
-                ping_timeout=10,
-                reconnect=0  # we handle reconnect ourselves
-            )
+            ssl_opt = getattr(ws_conn, '_ssl_opt', {})
+            ws_conn.run_forever(ping_interval=30, ping_timeout=10, sslopt=ssl_opt)
         except KeyboardInterrupt:
             running = False
             break
@@ -297,7 +289,9 @@ def main():
         time.sleep(RECONNECT_DELAY)
 
     print()
-    print("  BeaverOps Agent stopped. Good luck with the beavers! 🦫")
+    print("  BeaverOps Agent stopped. Good luck with the beavers!")
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     try:
