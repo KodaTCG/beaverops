@@ -2104,9 +2104,11 @@ function tickRefreshBar() {
   const countdown = document.getElementById('refreshCountdown');
   if (agentConnected) {
     const elapsed = Date.now() - lastDataTime;
-    const pct = Math.min((elapsed / POLL_INTERVAL) * 100, 100);
+    // Once we've gone past POLL_INTERVAL, snap back to show a fresh cycle
+    const cycleElapsed = elapsed % POLL_INTERVAL;
+    const pct = (cycleElapsed / POLL_INTERVAL) * 100;
+    const remaining = Math.max(0, Math.ceil((POLL_INTERVAL - cycleElapsed) / 1000));
     if (bar) { bar.style.width = pct + '%'; bar.style.background = 'var(--amber)'; }
-    const remaining = Math.max(0, Math.ceil((POLL_INTERVAL - elapsed) / 1000));
     if (countdown) countdown.textContent = remaining + 's';
   } else {
     if (bar) { bar.style.width = '0%'; }
