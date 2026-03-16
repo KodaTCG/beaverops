@@ -1305,10 +1305,13 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="connection-pill" onclick="openModal()">
+      <div class="connection-pill" onclick="openModal()" title="Change session code">
         <div class="conn-dot" id="connDot"></div>
         <span id="connLabel">NOT CONNECTED</span>
       </div>
+      <button class="disconnect-btn" id="disconnectBtn" onclick="disconnect()" title="Disconnect and change code" style="display:none">
+        ✕ DISCONNECT
+      </button>
     </div>
   </div>
 </header>
@@ -1626,6 +1629,7 @@ function handleRelayMessage(msg) {
     agentConnected = msg.peerConnected;
     setConnState('connected', sessionCode);
     addTimelineEntry('ok', `✅ Relay connected — code <strong>${sessionCode}</strong>`);
+    document.getElementById('disconnectBtn').style.display = 'block';
     if (!agentConnected) {
       setConnState('connecting', 'WAITING FOR AGENT');
       addTimelineEntry('info', '⏳ Waiting for BeaverOps Agent to connect...');
@@ -1640,6 +1644,8 @@ function handleRelayMessage(msg) {
     // Hide the download prompt once agent is connected
     const dl = document.getElementById('downloadSection');
     if (dl) dl.style.display = 'none';
+    // Show disconnect button
+    document.getElementById('disconnectBtn').style.display = 'block';
   }
 
   else if (type === 'peer_disconnected') {
